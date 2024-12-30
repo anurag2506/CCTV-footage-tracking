@@ -7,6 +7,6 @@
 <p> The entire pipeline can be thought of 3 main processes: <br> <h4>1. Object Detection for the human beings in the frame </h4> <h4>2. The tracking of the detected objects through all the frames in the video</h4><h4>3. The classification of the detected objects as either 'wearing a coat' or 'not wearing a coat' </h4></p><br><br>
 
 <h3> Models Used </h3>
-<p> 1. The first 2 processes that involves, tracking of the detected objects has been integrated into one script, thanks to a very useful transformer called <b>Real Time DEtection TRansformer (RTDTER)</b> 2. For the classification, I chose a relatively lightweight model that has a good tradeoff between performance and speed, <b>ResNet50</b> on a custom dataset</p>
+<p> 1. The first 2 processes that involves, tracking of the detected objects has been integrated into one script, thanks to a very useful transformer called <b>Real Time DEtection TRansformer (RTDTER)</b><br> 2. For the classification, I chose a relatively lightweight model that has a good tradeoff between performance and speed, <b>ResNet50</b> on a custom dataset</p>
 
 
