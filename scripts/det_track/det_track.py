@@ -5,6 +5,7 @@ This is an example of how the model performs detection and tracking on a live fe
 import cv2
 from ultralytics import RTDETR
 
+
 device = "mps"
 model = RTDETR("/Users/anurag2506/Documents/coat/trained_models/trained_rtdetr.pt")
 model.to(device=device)
