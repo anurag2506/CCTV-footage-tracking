@@ -40,7 +40,7 @@ class TemporalSmoothingBuffer:
 class PersonTracker:
     def __init__(self, max_disappeared=30, min_distance=50):
         self.nextObjectID = 0
-        self.objects = {} 
+        self.objects = {}  # store centroids
         self.disappeared = {}
         self.max_disappeared = max_disappeared
         self.min_distance = min_distance
@@ -131,7 +131,6 @@ class CoatClassifier(torch.nn.Module):
         )
         self.model.fc = torch.nn.Linear(self.model.fc.in_features, 2)
 
-        # Add dropout for regularization
         self.dropout = torch.nn.Dropout(0.5)
 
     def forward(self, x):
@@ -153,7 +152,6 @@ class CoatClassifier(torch.nn.Module):
 
 
 def enhance_person_crop(image):
-    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
@@ -168,8 +166,7 @@ def enhance_person_crop(image):
     return enhanced
 
 
-def is_skin_exposed(cropped_image, skin_threshold=0.3):
-    # Convert to YCrCb color space for better skin detection
+def is_skin_exposed(cropped_image, skin_threshold=0.25):
     ycrcb_image = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2YCrCb)
     lower_skin = np.array([0, 135, 85], dtype=np.uint8)
     upper_skin = np.array([255, 180, 135], dtype=np.uint8)
@@ -186,7 +183,7 @@ def is_skin_exposed(cropped_image, skin_threshold=0.3):
 
     return skin_ratio > skin_threshold
 
-def is_white_lab_coat_exposed(cropped_image, white_threshold = 0.3):
+def is_white_lab_coat_exposed(cropped_image, white_threshold = 0.25):
     hsv_image = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2HSV)
     
     # Defining the range for the white color:
@@ -220,15 +217,13 @@ def process_video(video_path, device):
     classification_model.to(device)
     classification_model.eval()
 
-    # Initialize trackers and smoothing
     person_tracker = PersonTracker()
     temporal_smoother = TemporalSmoothingBuffer()
 
-    # Enhanced preprocessing
     preprocess = transforms.Compose(
         [
-            transforms.Resize((256, 256)),  
-            transforms.CenterCrop(224),
+            transforms.Resize((256, 256)),
+            transforms.CenterCrop(224), 
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
@@ -248,7 +243,7 @@ def process_video(video_path, device):
     out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
 
     min_box_size = 50
-    confidence_threshold = 0.6 
+    confidence_threshold = 0.5
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -258,6 +253,7 @@ def process_video(video_path, device):
         results = detection_model(frame)
         human_detections = [det for det in results[0].boxes if int(det.cls) == 0]
 
+        # Get bounding boxes
         bboxes = [det.xyxy[0].tolist() for det in human_detections]
         track_ids, tracked_bboxes = person_tracker.update(bboxes)
 
@@ -291,11 +287,12 @@ def process_video(video_path, device):
                         if is_skin_exposed(human_crop):
                             predicted_class = 0
                         elif is_white_lab_coat_exposed(human_crop):
-                            predicted_class == 1
+                            predicted_class = 1 
+                        elif not is_skin_exposed(human_crop):
+                            predicted_class = 1
                     else:
                         predicted_class = 0
 
-                    # Visualization
                     label = (
                         "Wearing a Coat"
                         if predicted_class == 1
@@ -334,8 +331,6 @@ def get_device():
     else:
         return "cpu"
 
-
-# Run the processing
 if __name__ == "__main__":
     device = get_device()
-    process_video("/Users/anurag2506/Documents/cctv/Chemistry Lab Safety.mp4", device)
+    process_video("/Users/anurag2506/Documents/coat/Chemistry Lab Safety.mp4", device)
