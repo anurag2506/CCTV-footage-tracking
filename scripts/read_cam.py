@@ -54,7 +54,7 @@ def process_camera_feed(device):
     )
 
     # Open the webcam (use 0 or 1 based on your system setup)
-    cap = cv2.VideoCapture("/Users/anurag2506/Documents/cctv/Chemistry Lab Safety.mp4")
+    cap = cv2.VideoCapture(1)
     if not cap.isOpened():
         print("Error: Couldn't access the webcam.")
         return
