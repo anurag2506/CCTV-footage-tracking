@@ -6,6 +6,7 @@ from ultralytics import RTDETR
 from huggingface_hub import hf_hub_download
 from PIL import Image
 import os
+import uvicorn
 import torch.nn.functional as F
 from model import (
     CoatClassifier,
@@ -174,3 +175,8 @@ async def process_video(video: UploadFile = File(...)):
         "Frames without coats": saved_frame_count,
         "The Frames with people without coats": output_folder,
     }
+
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("read_video:app", host="0.0.0.0", port=port)
