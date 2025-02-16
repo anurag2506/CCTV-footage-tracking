@@ -1,11 +1,9 @@
-torch==2.0.1            # For PyTorch (ensure compatibility with MPS backend on macOS)
-torchvision==0.15.2     # For models and transforms
-numpy==1.24.4           # For numerical operations
-Pillow==9.5.0           # For image processing
-opencv-python==4.8.0.76 # For handling video capture and processing
-matplotlib==3.7.1       # For optional visualization/debugging
-tqdm==4.65.0            # For progress bars during training
-ultralytics==8.0.55     # For YOLO models from Ultralytics
-huggingface-hub==0.17.2 # For accessing Hugging Face models and datasets
-langchain-scrapegraph
-selenium
+fastapi
+uvicorn
+torch
+torchvision
+ultralytics
+opencv-python
+numpy
+pillow
+huggingface_hub
