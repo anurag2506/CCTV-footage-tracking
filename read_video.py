@@ -3,11 +3,13 @@ import cv2
 import numpy as np
 from torchvision import transforms
 from ultralytics import RTDETR
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, login
 from PIL import Image
 import os
 import uvicorn
 import torch.nn.functional as F
+from fastapi import FastAPI, UploadFile, File, Response
+import shutil
 from model import (
     CoatClassifier,
     PersonTracker,
@@ -16,11 +18,8 @@ from model import (
     is_skin_exposed,
     is_white_lab_coat_exposed,
 )
-from fastapi import FastAPI, UploadFile, File
-import shutil
 
 app = FastAPI()
-
 
 def get_device():
     if torch.backends.mps.is_available():
@@ -30,24 +29,35 @@ def get_device():
     else:
         return "cpu"
 
-
 device = get_device()
 
-rtdetr_repo_id = "anurag2506/RTDETR_on_COCO8"
-rtdetr_model_path = hf_hub_download(repo_id=rtdetr_repo_id, filename="model.pt")
-detection_model = RTDETR(rtdetr_model_path).to(device=device)
+detection_model = None
+classification_model = None
+person_tracker = None
+temporal_smoother = None
 
-classification_model = CoatClassifier()
-path = hf_hub_download(
-    repo_id="anurag2506/coat_classification", filename="best_model.pth"
-)
-state_dict = torch.load(path, map_location=torch.device(device))
-classification_model.load_state_dict(state_dict, strict=False)
-classification_model.to(device)
-classification_model.eval()
-
-person_tracker = PersonTracker()
-temporal_smoother = TemporalSmoothingBuffer()
+@app.on_event("startup")
+def load_models():
+    global detection_model, classification_model, person_tracker, temporal_smoother
+    
+    print("Loading models...")
+    login(token="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")
+    
+    rtdetr_repo_id = "anurag2506/RTDETR_on_COCO8"
+    rtdetr_model_path = hf_hub_download(repo_id=rtdetr_repo_id, filename="model.pt")
+    detection_model = RTDETR(rtdetr_model_path).to(device=device)
+    
+    classification_model = CoatClassifier()
+    path = hf_hub_download(repo_id="anurag2506/coat_classification", filename="best_model.pth")
+    state_dict = torch.load(path, map_location=torch.device(device))
+    classification_model.load_state_dict(state_dict, strict=False)
+    classification_model.to(device)
+    classification_model.eval()
+    
+    person_tracker = PersonTracker()
+    temporal_smoother = TemporalSmoothingBuffer()
+    
+    print("Models loaded successfully.")
 
 preprocess = transforms.Compose(
     [
@@ -58,9 +68,13 @@ preprocess = transforms.Compose(
     ]
 )
 
-
 @app.post("/detect_coats/")
 async def process_video(video: UploadFile = File(...)):
+    global detection_model, classification_model, person_tracker, temporal_smoother
+    
+    if detection_model is None or classification_model is None:
+        return {"error": "Models not loaded yet. Please try again in a few seconds."}
+
     video_path = f"temp_videos/{video.filename}"
     os.makedirs("temp_videos", exist_ok=True)
 
@@ -73,14 +87,6 @@ async def process_video(video: UploadFile = File(...)):
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return {"Error": "Couldn't open the video."}
-
-    # video_name = os.path.basename(video_path)
-    # output_path = f"output_{os.path.splitext(video_name)[0]}.mp4"
-    # fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    # fps = int(cap.get(cv2.CAP_PROP_FPS))
-    # frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    # frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    # out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
 
     min_box_size = 50
     confidence_threshold = 0.5
@@ -135,30 +141,8 @@ async def process_video(video: UploadFile = File(...)):
                     if predicted_class == 0:
                         contains_no_coat = True
 
-                    # label = (
-                    #     "Wearing a Coat"
-                    #     if predicted_class == 1
-                    #     else "Not Wearing a Coat"
-                    # )
-                    # color = (0, 255, 0) if predicted_class == 1 else (0, 0, 255)
-                    # cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                    # cv2.putText(
-                    #     frame,
-                    #     f"ID:{track_id} {label} ({smoothed_conf:.2f})",
-                    #     (x1, y1 - 10),
-                    #     cv2.FONT_HERSHEY_SIMPLEX,
-                    #     0.5,
-                    #     color,
-                    #     2,
-                    # )
-
             except Exception as e:
                 print(f"Error during classification: {e}")
-
-        # # out.write(frame)
-        # cv2.imshow("RT-DETR Detection and Classification", frame)
-        # if cv2.waitKey(1) & 0xFF == ord("q"):
-        #     break
 
         if contains_no_coat:
             frame_path = os.path.join(output_folder, f"frame_{frame_count}.jpg")
@@ -167,15 +151,16 @@ async def process_video(video: UploadFile = File(...)):
             print(f"{frame_count} frame in the video has been saved")
 
     cap.release()
-    # out.release()
-    # cv2.destroyAllWindows()
 
-    return {
-        "message": "Video has been processed",
-        "Frames without coats": saved_frame_count,
-        "The Frames with people without coats": output_folder,
-    }
+    # Create a zip file of the output folder
+    zip_path = f"{output_folder}.zip"
+    shutil.make_archive(output_folder, 'zip', output_folder)
 
+    return Response(
+        content=open(zip_path, "rb").read(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={output_folder}.zip"}
+    )
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
