@@ -7,3 +7,4 @@ opencv-python
 numpy
 pillow
 huggingface_hub
+python-multipart
